@@ -15,6 +15,17 @@ name: OpenWrt Builder
 on:
   repository_dispatch:
   workflow_dispatch:
+    inputs:
+      config_file:
+        description: 'Wybierz profil (.config)'
+        required: true
+        default: 'bpi-r4.config'
+        type: choice
+        options:
+          - 'bpi-r4.config'
+          - 'bpi-r3.config'
+#         - 'x86_64-home.config'
+#         - 'minimal-testing.config'
 
 env:
   REPO_URL: https://github.com/openwrt/openwrt
@@ -81,17 +92,30 @@ jobs:
     - name: Load custom configuration
       run: |
         [ -e files ] && mv files openwrt/files
-        [ -e $CONFIG_FILE ] && mv $CONFIG_FILE openwrt/.config
+        # Select .config: listbox or fallback to default
+        SELECTED_CONFIG="${{ github.event.inputs.config_file }}"
+        if [ -n $SELECTED_CONFIG ] && [ -f configs/$SELECTED_CONFIG ]; then
+            echo "Using configuration selected from list: ${{ github.event.inputs.config_file }}"
+            cp "configs/$SELECTED_CONFIG" openwrt/.config
+        elif [ -e $CONFIG_FILE ]; then
+            echo "Configuration not selected, using default .config"
+            mv $CONFIG_FILE openwrt/.config
+        else
+            echo "ERROR: Couldn't find any .config file!"
+            exit 1
+        fi
         chmod +x $DIY_P2_SH
         cd openwrt
         $GITHUB_WORKSPACE/$DIY_P2_SH
+        # Generate full config based on seed
+        make defconfig
 
-    - name: Download package
+    - name: Download packages
       id: package
       run: |
         cd openwrt
-        make defconfig
-        make download -j8
+        make download -j8 V=s
+        # Remove broken/empty files
         find dl -size -1024c -exec ls -l {} \;
         find dl -size -1024c -exec rm -f {} \;
 
