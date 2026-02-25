@@ -1,0 +1,84 @@
+name: Sync Config List
+
+on:
+  push:
+    paths:
+      - 'configs/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update-form:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.MY_TOKEN }}
+          fetch-depth: 0
+
+      - name: Generate Config List
+        id: list
+        run: |
+          # Pobieramy listę plików, czyścimy puste linie i formatujemy pod YAML
+          # Używamy 10 spacji wcięcia, aby pasowało do pliku openwrt-builder.yml
+          CONFIGS=$(ls configs/ | grep ".config" | sed "s/^/          - '/;s/$/'/" | tr '\n' ' ' | sed 's/ $//')
+          echo "NEW_LIST=$CONFIGS" >> $GITHUB_ENV
+
+      - name: Update Builder YAML
+        shell: python
+        run: |
+          import os
+
+          # Pobieramy listę plików bezpośrednio z systemu plików
+          if not os.path.exists('configs'):
+              print("Folder configs nie istnieje!")
+              exit(1)
+
+          config_files = sorted([f for f in os.listdir('configs') if f.endswith('.config')])
+          file_path = '.github/workflows/openwrt-builder.yml'
+
+          with open(file_path, 'r') as f:
+              lines = f.readlines()
+
+          new_lines = []
+          skip_zone = False
+          found_start = False
+
+          for line in lines:
+              if '# CONFIG_LIST_START' in line:
+                  new_lines.append(line)
+                  # Wstawiamy świeżą listę plików
+                  for cfg in config_files:
+                      new_lines.append(f"          - '{cfg}'\n")
+                  skip_zone = True
+                  found_start = True
+                  continue
+
+              if '# CONFIG_LIST_END' in line:
+                  skip_zone = False
+                  new_lines.append(line)
+                  continue
+
+              if not skip_zone:
+                  new_lines.append(line)
+
+          if not found_start:
+              print("BŁĄD: Nie znaleziono znacznika # CONFIG_LIST_START!")
+              exit(1)
+
+          with open(file_path, 'w') as f:
+              f.writelines(new_lines)
+
+      - name: Commit and Push
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          git add .github/workflows/openwrt-builder.yml
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m 'chore: sync config list in GUI'
+            git push
+          fi

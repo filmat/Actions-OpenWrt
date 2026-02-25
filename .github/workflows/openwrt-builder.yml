@@ -22,10 +22,9 @@ on:
         default: 'bpi-r4.config'
         type: choice
         options:
+          # CONFIG_LIST_START
           - 'bpi-r4.config'
-          - 'bpi-r3.config'
-#         - 'x86_64-home.config'
-#         - 'minimal-testing.config'
+          # CONFIG_LIST_END
 
 env:
   REPO_URL: https://github.com/openwrt/openwrt
