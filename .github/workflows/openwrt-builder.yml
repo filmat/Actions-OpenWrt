@@ -23,6 +23,9 @@ on:
         type: choice
         options:
           # CONFIG_LIST_START
+          - 'bpi-r3-minimal.config'
+          - 'bpi-r3.config'
+          - 'bpi-r4-minimal.config'
           - 'bpi-r4.config'
           # CONFIG_LIST_END
 
